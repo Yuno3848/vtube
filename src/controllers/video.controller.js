@@ -142,8 +142,10 @@ const deleteVideo = asyncHandler(async (req, res) => {
   if (!video) {
     throw new ApiError(404, "video not found");
   }
-
-  return res.status(400).json({
+  if (video.owner.toString() !== req.user.id.toString()) {
+    throw new ApiError(403, "You are not authorized to delete this video");
+  }
+  return res.status(200).json({
     success: true,
     message: "video deleted successfully",
     video,
@@ -162,6 +164,7 @@ const togglePublishStatus = asyncHandler(async (req, res) => {
   }
   video.isPublished = !video.isPublished;
 
+  await video.save();
   return res
     .status(400)
     .json(
