@@ -36,7 +36,7 @@ const toggleCommentLike = asyncHandler(async (req, res) => {
   const { commentId } = req.params;
   const userId = req.user.id;
   //TODO: toggle like on comment
-  if (!commentId || mongoose.Types.ObjectId.isValid(commentId)) {
+  if (!commentId || !mongoose.Types.ObjectId.isValid(commentId)) {
     throw new ApiError(404, "Invalid comment id...");
   }
 
@@ -45,8 +45,10 @@ const toggleCommentLike = asyncHandler(async (req, res) => {
     likedBy: userId,
   });
   if (commentVideo) {
-    Like.findByIdAndDelete(commentVideo._id);
-    throw new ApiResponse(200, "comment unliked successfully");
+    await Like.findByIdAndDelete(commentVideo._id);
+    return res
+      .status(200)
+      .json(new ApiResponse(200, "comment unliked successfully"));
   }
   const newLike = await Like.create({
     comment: commentId,
@@ -62,16 +64,18 @@ const toggleTweetLike = asyncHandler(async (req, res) => {
   const { tweetId } = req.params;
   const userId = req.user.id;
   //TODO: toggle like on tweet
-  if (!tweetId || mongoose.Types.ObjectId.isValid(tweetId)) {
+  if (!tweetId || !mongoose.Types.ObjectId.isValid(tweetId)) {
     throw new ApiError(404, "Invalid tweet id...");
   }
 
-  const tweetToggleVideo = await Like.findByOne({
+  const tweetToggleVideo = await Like.findOne({
     tweet: tweetId,
     likedBy: userId,
   });
   if (tweetToggleVideo) {
-    throw new ApiResponse(400, "tweet unliked successfully...");
+    return res
+      .status(200)
+      .json(new ApiResponse(400, "tweet unliked successfully..."));
   } else {
     await Like.create({
       tweet: tweetId,
@@ -83,28 +87,43 @@ const toggleTweetLike = asyncHandler(async (req, res) => {
 
 const getLikedVideos = asyncHandler(async (req, res) => {
   //TODO: get all liked videos
-  const likedVideos = await Like.aggregate([
+
+  const likedVideoDetails = await Like.aggregate([
     {
       $match: {
-        likedBy: req.user.id,
+        likedBy: new mongoose.Types.ObjectId(req.user.id),
       },
     },
     {
       $lookup: {
         from: "videos",
-        localField: "_id",
         foreignField: "_id",
-        as: "likedVideos",
+        localField: "video",
+        as: "likeVideoData",
       },
+    },
+    {
+      $unwind: "$likeVideoData",
     },
     {
       $project: {
         _id: 0,
-        video: "$likedVideos",
+        video: "$likeVideoData",
       },
     },
   ]);
-  throw new ApiResponse(200, "liked videos", likedVideos);
+
+  console.log("liked videos :", likedVideoDetails);
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        "fetched liked videos successfully",
+        likedVideoDetails
+      )
+    );
 });
 
 export { toggleCommentLike, toggleTweetLike, toggleVideoLike, getLikedVideos };
